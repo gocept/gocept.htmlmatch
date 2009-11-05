@@ -5,8 +5,14 @@ import StringIO
 
 try:
     from lxml import etree as ElementTree
+    from lxml.etree import _Element as Element
 except ImportError:
     from xml.etree import ElementTree
+    from xml.etree.ElementTree import Element
+
+
+NAMESPACE = 'http://xml.gocept.com/namespaces/htmlmatch'
+NS = '{%s}' % NAMESPACE
 
 
 class Mismatch(Exception):
@@ -18,7 +24,10 @@ class Mismatch(Exception):
 
 
 def start_tag(node):
-    return '<%s>' % node.tag
+    if isinstance(node, Element):
+        return '<%s>' % node.tag
+    tags = node
+    return ' or '.join(sorted('<%s>' % tag for tag in tags))
 
 
 def end_tag(node):
@@ -40,13 +49,15 @@ class HTMLMatch(object):
         self.input = input
         self.matched_input = StringIO.StringIO()
         self.expression_root = ElementTree.fromstring(
-            '<root xmlns:m="http://xml.gocept.com/namespaces/htmlmatch">'
-            '%s</root>' % expression).getchildren()[0]
+            '<root xmlns:m="%s">%s</root>' % (NAMESPACE, expression)
+            ).getchildren()[0]
         self.input_root = ElementTree.fromstring(input)
 
     def match(self, expression_node, input_node):
-        if expression_node.tag != input_node.tag:
-            raise Mismatch(start_tag(expression_node),
+        expected_tags = ([expression_node.tag]
+                         + expression_node.get(NS+'alt', '').split())
+        if input_node.tag not in expected_tags:
+            raise Mismatch(start_tag(expected_tags),
                            start_tag(input_node))
         self.matched_input.write(start_tag(input_node))
         input_children = input_node.getchildren()
