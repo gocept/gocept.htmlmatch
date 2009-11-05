@@ -5,10 +5,10 @@ import StringIO
 
 try:
     from lxml import etree as ElementTree
-    from lxml.etree import _Element as Element
+    from lxml.etree import _Element as element_class
 except ImportError:
     from xml.etree import ElementTree
-    from xml.etree.ElementTree import Element
+    from xml.etree.ElementTree import _ElementInterface as element_class
 
 
 NAMESPACE = 'http://xml.gocept.com/namespaces/htmlmatch'
@@ -24,7 +24,7 @@ class Mismatch(Exception):
 
 
 def start_tag(node):
-    if isinstance(node, Element):
+    if isinstance(node, element_class):
         return '<%s>' % node.tag
     tags = node
     return ' or '.join(sorted('<%s>' % tag for tag in tags))
