@@ -2,7 +2,11 @@
 # See also LICENSE.txt
 
 import StringIO
-import xml.etree.ElementTree
+
+try:
+    from lxml import etree as ElementTree
+except ImportError:
+    from xml.etree import ElementTree
 
 
 class Mismatch(Exception):
@@ -35,8 +39,10 @@ class HTMLMatch(object):
         self.expression = expression
         self.input = input
         self.matched_input = StringIO.StringIO()
-        self.expression_root = xml.etree.ElementTree.fromstring(expression)
-        self.input_root = xml.etree.ElementTree.fromstring(input)
+        self.expression_root = ElementTree.fromstring(
+            '<root xmlns:m="http://xml.gocept.com/namespaces/htmlmatch">'
+            '%s</root>' % expression).getchildren()[0]
+        self.input_root = ElementTree.fromstring(input)
 
     def match(self, expression_node, input_node):
         if expression_node.tag != input_node.tag:
