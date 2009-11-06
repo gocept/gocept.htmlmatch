@@ -49,7 +49,14 @@ class HTMLMatch(object):
         self.input = input
         self.matched_input = StringIO.StringIO()
 
-    def match(self, expression_node, input_node):
+    def element_match(self, expression_node, input_node):
+        """Match an expression node to an input node.
+
+        The expression must not be an ellipsis.
+
+        Returns nothing.
+
+        """
         expected_tags = ([expression_node.tag]
                          + expression_node.get(NS+'alt', '').split())
         if input_node.tag not in expected_tags:
@@ -57,24 +64,121 @@ class HTMLMatch(object):
                            start_tag(input_node))
         self.matched_input.write(start_tag(input_node))
 
-        expression_children = expression_node.getchildren()
-        input_children = input_node.getchildren()
-        while expression_children and input_children:
-            self.match(expression_children.pop(0), input_children.pop(0))
-        if expression_children:
-            # encountered closing tag too early
-            raise Mismatch(start_tag(expression_children[0]),
-                           end_tag(input_node))
-        if input_children:
-            # encountered extra stuff before the closing tag
-            raise Mismatch(end_tag(expression_node),
-                           start_tag(input_children[0]))
+        self.sequence_match(expression_node.getchildren(),
+                            input_node.getchildren())
 
         self.matched_input.write(end_tag(input_node))
 
+    def subsequence_match(self, expression_nodes, input_nodes):
+        """Match a sequence of expression nodes to a subsequence of input
+        nodes.
+
+        Expression nodes may contain ellipses.
+
+        Returns the remaining input nodes.
+
+        """
+        input_nodes = input_nodes[:]
+        while True:
+            try:
+                return self.start_match(expression_nodes, input_nodes)
+            except Mismatch:
+                if not input_nodes:
+                    raise
+            del input_nodes[0]
+
+    def ellipsis_match(self, expression_nodes, input_nodes):
+        """Match a sequence of expression nodes to a subsequence of input
+        nodes or their children recursively.
+
+        Returns the remaining input nodes. If the match occurred on the
+        children of an input node, all input nodes following that one will be
+        returned.
+
+        """
+        input_nodes = input_nodes[:]
+        try:
+            return self.subsequence_match(expression_nodes, input_nodes)
+        except Mismatch, mismatch:
+            while input_nodes:
+                try:
+                    self.ellipsis_match(expression_nodes,
+                                        input_nodes.pop(0).getchildren())
+                except Mismatch:
+                    pass
+                else:
+                    return input_nodes
+            else:
+                raise mismatch
+
+    def start_match(self, expression_nodes, input_nodes):
+        """Match a sequence of expression nodes to the start of a sequence of
+        input nodes.
+
+        Expression nodes may contain ellipses.
+
+        Returns the remaining input nodes.
+
+        """
+        expression_nodes = expression_nodes[:]
+        input_nodes = input_nodes[:]
+        while expression_nodes and input_nodes:
+            # match node by node until we encounter an ellipsis
+            expression_node = expression_nodes.pop(0)
+
+            if expression_node.tag == NS + 'ellipsis':
+                break
+
+            self.element_match(expression_node, input_nodes.pop(0))
+        else:
+            # we didn't encounter any ellipses, all expression nodes must have
+            # matched
+            if expression_nodes:
+                # encountered closing tag too early
+                raise Mismatch(start_tag(expression_nodes[0]), '')
+
+            return input_nodes
+
+        if expression_node.getchildren():
+            # match the expression inside the ellipsis, eat any input up to a
+            # match
+            input_nodes = self.ellipsis_match(
+                expression_node.getchildren(), input_nodes)
+
+        if not expression_nodes:
+            # eat all input after the ellipsis
+            return []
+
+        # match all remaining expression nodes up to the end of the input, eat
+        # any input after the ellipsis up to a match
+        while True:
+            try:
+                self.sequence_match(expression_nodes, input_nodes)
+            except Mismatch:
+                if not input_nodes:
+                    raise
+            else:
+                return []
+            del input_nodes[0]
+
+    def sequence_match(self, expression_nodes, input_nodes):
+        """Match a sequence of expression nodes to a complete sequence of
+        input nodes.
+
+        Expression nodes may contain ellipses.
+
+        Returns nothing.
+
+        """
+        input_nodes = self.start_match(expression_nodes, input_nodes)
+        if input_nodes:
+            # encountered extra stuff before the closing tag
+            raise Mismatch(end_tag(expression_node),
+                           start_tag(input_nodes[0]))
+
     def __call__(self):
         try:
-            self.match(self.expression, self.input)
+            self.sequence_match([self.expression], [self.input])
         except Mismatch, m:
             self.expected = m.expected
             self.got = m.got
