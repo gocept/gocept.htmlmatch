@@ -60,18 +60,20 @@ class HTMLMatch(object):
             raise Mismatch(start_tag(expected_tags),
                            start_tag(input_node))
         self.matched_input.write(start_tag(input_node))
+
+        expression_children = expression_node.getchildren()
         input_children = input_node.getchildren()
-        for expression_child in expression_node.getchildren():
-            try:
-                input_child = input_children.pop(0)
-            except IndexError:
-                # encountered closing tag too early
-                raise Mismatch(start_tag(expression_child),
-                               end_tag(input_node))
-            self.match(expression_child, input_child)
+        while expression_children and input_children:
+            self.match(expression_children.pop(0), input_children.pop(0))
+        if expression_children:
+            # encountered closing tag too early
+            raise Mismatch(start_tag(expression_children[0]),
+                           end_tag(input_node))
         if input_children:
+            # encountered extra stuff before the closing tag
             raise Mismatch(end_tag(expression_node),
                            start_tag(input_children[0]))
+
         self.matched_input.write(end_tag(input_node))
 
     def __call__(self):
