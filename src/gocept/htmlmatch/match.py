@@ -1,8 +1,6 @@
 # Copyright (c) 2009 gocept gmbh & co. kg
 # See also LICENSE.txt
 
-import StringIO
-
 try:
     from lxml import etree as ElementTree
     from lxml.etree import _Element as element_class
@@ -18,10 +16,6 @@ NS = '{%s}' % NAMESPACE
 class Mismatch(Exception):
     """A mismatch between subtrees of expression and input was found."""
 
-    def __init__(self, expected, got):
-        self.expected = expected
-        self.got = got
-
 
 def start_tag(node):
     if isinstance(node, element_class):
@@ -34,6 +28,38 @@ def end_tag(node):
     return '</%s>' % node.tag
 
 
+class MatchInfo(object):
+    """Information about an event encountered while matching."""
+
+    element = None
+    event = '' # start, end
+    weight = 0
+
+    def __init__(self, element, event, weight):
+        self.element = element
+        self.event = event
+        self.weight = weight
+
+
+class MatchPath(object):
+    """Accumulated MatchInfos up to a mismatch."""
+
+    def __init__(self, infos, expected, got):
+        self.infos = infos
+        self.expected = expected
+        self.got = got
+
+    def report(self):
+        return ''
+
+    def weight(self):
+        return sum(info.weight for info in self.infos)
+
+    def depth(self):
+        return (sum(1 for info in self.infos if info.event == 'start')
+                - sum(1 for info in self.infos if info.event == 'end'))
+
+
 class HTMLMatch(object):
     """A match instance describes how well an xml element tree conforms to a
     match pattern also given as an element tree.
@@ -41,13 +67,17 @@ class HTMLMatch(object):
     """
 
     matches = None
-    got = None
-    expected = None
 
     def __init__(self, expression, input):
         self.expression = expression
         self.input = input
-        self.matched_input = StringIO.StringIO()
+        self.matched_input = []
+        self.expected = []
+        self.match_paths = []
+
+    def mismatch(self, got):
+        self.match_paths.append(MatchPath(
+                sum(self.matched_input, []), self.expected[-1], got))
 
     def element_match(self, expression_node, input_node):
         """Match an expression node to an input node.
@@ -60,14 +90,14 @@ class HTMLMatch(object):
         expected_tags = ([expression_node.tag]
                          + expression_node.get(NS+'alt', '').split())
         if input_node.tag not in expected_tags:
-            raise Mismatch(start_tag(expected_tags),
-                           start_tag(input_node))
-        self.matched_input.write(start_tag(input_node))
+            self.mismatch(start_tag(input_node))
+            raise Mismatch
+        self.matched_input[-1].append(MatchInfo(input_node, 'start', 1))
 
         self.sequence_match(expression_node.getchildren(),
                             input_node.getchildren())
 
-        self.matched_input.write(end_tag(input_node))
+        self.matched_input[-1].append(MatchInfo(input_node, 'end', 1))
 
     def subsequence_match(self, expression_nodes, input_nodes):
         """Match a sequence of expression nodes to a subsequence of input
@@ -177,6 +207,7 @@ class HTMLMatch(object):
                            start_tag(input_nodes[0]))
 
     def __call__(self):
+        self.matched_input.append([])
         try:
             self.sequence_match([self.expression], [self.input])
         except Mismatch, m:
