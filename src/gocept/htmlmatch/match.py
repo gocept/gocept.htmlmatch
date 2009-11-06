@@ -173,7 +173,7 @@ class HTMLMatch(object):
         input_nodes = self.start_match(expression_nodes, input_nodes)
         if input_nodes:
             # encountered extra stuff before the closing tag
-            raise Mismatch(end_tag(expression_node),
+            raise Mismatch('',
                            start_tag(input_nodes[0]))
 
     def __call__(self):

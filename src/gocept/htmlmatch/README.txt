@@ -181,3 +181,6 @@ Ellipses may be used at the beginning and end of the expression:
 
 >>> imatch('<m:ellipsis><p></p></m:ellipsis>', '<p></p>')
 >>> imatch('<m:ellipsis><p></p></m:ellipsis>', '<html><p></p></html>')
+>>> imatch('<m:ellipsis><p></p></m:ellipsis>', '<html><b></b></html>')
+>>> imatch('<m:ellipsis><p><a></a></p></m:ellipsis>',
+...        '<html><p></p><p><b></b></p><p><a><b></b></a></p></html>')
