@@ -35,8 +35,8 @@ def end_tag(node):
 
 
 class HTMLMatch(object):
-    """A match instance describes how well an xml input text conforms
-    to a pattern.
+    """A match instance describes how well an xml element tree conforms to a
+    match pattern also given as an element tree.
 
     """
 
@@ -48,10 +48,6 @@ class HTMLMatch(object):
         self.expression = expression
         self.input = input
         self.matched_input = StringIO.StringIO()
-        self.expression_root = ElementTree.fromstring(
-            '<root xmlns:m="%s">%s</root>' % (NAMESPACE, expression)
-            ).getchildren()[0]
-        self.input_root = ElementTree.fromstring(input)
 
     def match(self, expression_node, input_node):
         expected_tags = ([expression_node.tag]
@@ -78,7 +74,7 @@ class HTMLMatch(object):
 
     def __call__(self):
         try:
-            self.match(self.expression_root, self.input_root)
+            self.match(self.expression, self.input)
         except Mismatch, m:
             self.expected = m.expected
             self.got = m.got
@@ -108,7 +104,11 @@ def match(expression, input):
     Returns an HTMLMatch instance.
 
     """
-    m = HTMLMatch(expression, input)
+    expression_root = ElementTree.fromstring(
+        '<root xmlns:m="%s">%s</root>' % (NAMESPACE, expression)
+        ).getchildren()[0]
+    input_root = ElementTree.fromstring(input)
+    m = HTMLMatch(expression_root, input_root)
     m()
     return m
 
